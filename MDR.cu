@@ -547,11 +547,21 @@ __global__ void MDR( int* dev_SNP_values, float* dev_output, int* dev_tp, int* d
 	
 }
 
-
-
-
-
-
+float* extract_min(struct str** top_cut_list, int cut, float* a){
+	float minim = 1;
+	float ind = -1;
+	for (int i = 0; i < cut; i++){
+		//fprintf(stderr,"inside func: value,index: %f : %d\n", (*(top_cut_list+i))-> value, (*(top_cut_list+i))-> index);
+		if ((*(top_cut_list+i))-> value < minim){
+			minim = (*(top_cut_list+i))-> value;
+			ind = i;
+		}
+	}
+	a[0] = minim;
+	a[1] = ind;
+	//fprintf(stderr,"%f : %f\n", *(a+0), *(a+1));
+	return a;
+}
 
 void merge(struct str** arr, int l, int m, int r) 
 { 
@@ -819,8 +829,8 @@ void* routine( void *pvoidData) {
 	cudaMalloc((void**)&dev_combinations, (d *  ORDER * sizeof(int)) );
 	HANDLE_ERROR( cudaMemcpy(dev_combinations, (combinations + s * ORDER), (d *  ORDER * sizeof(int)), cudaMemcpyHostToDevice));
 	
-	//fprintf(stderr,"\nGPU %d, calling the kernel with this configuration:\n", deviceID);
-	//fprintf(stderr," comb-start: %lu, #combs: %lu, comb-end: %lu\n order: %d\n NSNPS: %d\n NIND: %d\n # CVs: %d\n THRESHOLD: %f\n BLOCK SIZE: %d\n GRID SIZE: %d\n",s,d,e, ORDER, NSNPS, NIND, CV, THR, BSx, GSx);
+	fprintf(stderr,"\nGPU %d, calling the kernel with this configuration:\n", deviceID);
+	fprintf(stderr," comb-start: %lu, #combs: %lu, comb-end: %lu\n order: %d\n NSNPS: %d\n NIND: %d\n # CVs: %d\n THRESHOLD: %f\n BLOCK SIZE: %d\n GRID SIZE: %d\n",s,d,e, ORDER, NSNPS, NIND, CV, THR, BSx, GSx);
 
   	//HANDLE_ERROR( cudaMemcpy(dev_cv_indices, cv_indices, indices_size, cudaMemcpyHostToDevice));
   	//fprintf(stderr,"matrices copied  to GPU %d\n", deviceID);
@@ -1095,6 +1105,7 @@ int main(int argc, char **argv)
 	if (strcmp(outputFile, "no_out")){
 		//sort output and print to file
 		struct str **array = (struct str **) malloc(NUMCOMBS * sizeof(struct str*));
+		
 	
 		FILE *fpout;
 		fpout = fopen(outputFile, "w");
@@ -1109,12 +1120,19 @@ int main(int argc, char **argv)
 				//objects[i].value=*(output + i);
 				//objects[i].index=i;
 			}
+			//printf("last thread terminated. \nelapsed %f seconds\n", ((float)(clock() - start_clock) / CLOCKS_PER_SEC));
+			fprintf(stderr,"Effectively sorting output..elapsed %f seconds\n", ((float)(clock() - start_clock) / CLOCKS_PER_SEC));
 			
-			//fprintf(stderr,"Effectively sorting output... \n");	
-			mergeSort(array, 0, NUMCOMBS - 1);
+
 			//fprintf(stderr,"\nelapsed %f seconds\n", ((float)(clock() - start_clock) / CLOCKS_PER_SEC));
 		       	//fprintf(stderr,"Effectively writing to file: %s \n", outputFile);
 		       	int cut = imin(CUT,NUMCOMBS);
+
+			/*
+			//version merge all
+
+		       	mergeSort(array, 0, NUMCOMBS - 1);	
+		       	fprintf(stderr,"terminated merge sort.. elapsed %f seconds\n", ((float)(clock() - start_clock) / CLOCKS_PER_SEC));
 		       	//fprintf(stderr,"breaking to first %d combinations", cut);
 			for (int j = 0; j < cut; j++){
 				for (int q=0; q< ORDER; q++){
@@ -1126,12 +1144,7 @@ int main(int argc, char **argv)
 						int fp_val = *(fp + (*(array + j))->index);
 						int tn_val = NIND - ncases - fp_val;
 						int fn_val = ncases - tp_val;
-						/*
-						if ((*(array + j))->index == TESTCOMB)
-							printf("\n!!!!:%d %d %d %d\n", tp_val, fp_val, tn_val, fn_val);
-						if (j == TESTCOMB)
-							printf("\n!!!!:%d %d %d %d\n", tp_val, fp_val, tn_val, fn_val);
-						*/
+						
 						fprintf(fpout,"snp%d %f %d %d %d %d\n", 
 							//*(combinations + j * ORDER + q), *(output + NUMCOMBS * (CV -1) + 1 * objects[j].index + 0));
 							//*(combinations + j * ORDER + q), objects[j].value);
@@ -1140,15 +1153,90 @@ int main(int argc, char **argv)
 					else
 						fprintf(fpout,"snp%d ", *(combinations + (*(array + j))->index * ORDER + q));
 					
+			
 				}
 			}
-			//fprintf(stderr,"\nelapsed %f seconds\n", ((float)(clock() - start_clock) / CLOCKS_PER_SEC));
-			for(int i=0;i<NUMCOMBS;i++)
-				free(*(array + i));
-			free(array);
-		
+			//end version merge all
 			
-		}
+			*/
+			
+			
+			
+			//alternative
+			//new version
+		       	struct str **top_cut = (struct str **) malloc(cut * sizeof(struct str*));
+		       	for (int j = 0; j < cut; j++){
+		       		*(top_cut + j) = (struct str*) malloc(sizeof(struct str));
+		       		(*(top_cut + j))->value = 0;
+		       	}
+		       	
+		       	//scan through output and insert in top_cut
+		       	float min_cut = 0;
+		       	int ind;
+		       	float* a = (float*) malloc(2 * sizeof(float));
+		       	
+		       	for (int j = 0; j < NUMCOMBS; j++){
+		       		
+		       		
+		       		if (*(output + j) < min_cut)
+		       			continue;
+		       		//fprintf(stderr,"---\n");
+		       		//fprintf(stderr,"min_cut,index: %f %d\n", min_cut, ind);
+		       		else {
+		       			
+		       			extract_min(top_cut, cut, a);
+			       		//fprintf(stderr,"%f, %f", *(a+0), *(a+1));
+			       		min_cut =*(a+0);
+			       		ind = (int) *(a+1);
+		       			
+		       			//fprintf(stderr,"removing %f %d\n,", min_cut, ind);
+		       			(*(top_cut + ind))-> index = j;
+		       			(*(top_cut + ind))-> value = *(output + j);
+		       			//fprintf(stderr,"inserting %f %d",*(output + j), j);
+		       			//for (int r = 0; r < cut; r++){
+		       				//fprintf(stderr,"index r-th,value r-th: %d,%f \n", (*(top_cut + r))-> index, (*(top_cut + r))-> value);
+		       			//fprintf(stderr,"\n");
+		       			//}
+		       			//fprintf(stderr,"inserted output + j at index j: %f, %d\n", *(output + j), j);
+		       		}
+		       	}
+
+		       	fprintf(stderr,"top cut sorting... \n");
+		       	
+		       mergeSort(top_cut, 0, cut - 1);	
+			
+			for (int j = 0; j < cut; j++)
+		       		fprintf(stderr,"index,value: %d,%f \n", (*(top_cut + j))-> index, (*(top_cut + j))-> value);
+		       fprintf(stderr,"top cut sorted; elapsed %f seconds\n", ((float)(clock() - start_clock) / CLOCKS_PER_SEC));
+		       
+		       
+		       
+		       for (int j = 0; j < cut; j++){
+				for (int q=0; q< ORDER; q++){
+					if (q == 0)
+						fprintf(fpout,"snp%d ", *(combinations + (*(top_cut + j))->index * ORDER + q));
+					else if (q == ORDER -1){
+					
+						int tp_val = *(tp + (*(top_cut + j))->index);
+						int fp_val = *(fp + (*(top_cut + j))->index);
+						int tn_val = NIND - ncases - fp_val;
+						int fn_val = ncases - tp_val;
+						
+						fprintf(fpout,"snp%d %f %d %d %d %d\n", 
+							//*(combinations + j * ORDER + q), *(output + NUMCOMBS * (CV -1) + 1 * objects[j].index + 0));
+							//*(combinations + j * ORDER + q), objects[j].value);
+							*(combinations +(*(top_cut + j))->index * ORDER + q), (*(top_cut + j))->value, tp_val, fp_val, tn_val, fn_val);
+					}
+					else
+						fprintf(fpout,"snp%d ", *(combinations + (*(top_cut + j))->index * ORDER + q));
+					
+			
+				}
+			}
+			
+			//end new version
+			
+			
 		
 		/*
 		else{
@@ -1181,8 +1269,9 @@ int main(int argc, char **argv)
 		}*/
 		//fprintf(stderr,"Output written to file %s\n", outputFile);
 		}
+	}
 	
-	else
+	//else
 		//fprintf(stderr,"Output was not saved to file \n");
 	
 	free(output);
