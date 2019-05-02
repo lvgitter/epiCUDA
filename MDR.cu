@@ -1,9 +1,6 @@
 #include <iostream>
 #include <math.h>
 #include <time.h>
-//#include "MDR.h"
-//#include "MDR_kernel.cu"
-//#include "MDR.cu"
 
 #if _WIN32
     //Windows threads.
@@ -167,7 +164,7 @@ __device__ float compute_measure(int cases_high, int controls_high, int controls
 		train_measure = float(cases_high + controls_low)/float(cases_high + controls_low + controls_high + cases_low);
 		
 	}
-	else if (m - '0' == 55){ //TODO
+	else if (m - '0' == 55){
 		train_measure = float(cases_high + controls_low)/float(cases_high + controls_low + controls_high + cases_low);
 		
 	}
@@ -256,45 +253,7 @@ __global__ void MDR( int* dev_SNP_values, float* dev_output, int* dev_tp, int* d
 	}
 	
 	
-	//printf("thread with tid %d is assigned combination: <%d, %d>\n", tid, thread_combination[0], thread_combination[1]); 
 	
-	//retrieve the genotype of each snp in the combination, from SNPvalues, for ALL individuals
-	//int* thread_geno = (int*)malloc(NIND * ORDER * sizeof(int));
-	/*
-	int thread_geno[ORDER * NIND];
-	for (int i=0; i< NIND; i++) {
-		for (int j=0; j< ORDER; j++) {
-			*(&thread_geno[0] + j * NIND + i  ) = *(dev_SNP_values + NIND * *(&thread_combination[0] + j) + i);
-		}
-	}
-	*/
-	
-	/*
-	if (*(&thread_combination[0] + 0) == TESTSNP0 && *(&thread_combination[0] + 1) == TESTSNP1){
-		printf("START of SNP_values\n");
-		for (int j=0; j < 4050; j++) {
-			printf("%d ", *(dev_SNP_values + NIND * 0 + j));
-			if (j == 1999 || j == 4000)
-				printf("\n");
-			}
-		printf("\nend START\n\n");
-		}
-		
-	*/
-	
-	/*
-	if (*(&thread_combination[0] + 0) == TESTSNP0 && *(&thread_combination[0] + 1) == TESTSNP1){
-		printf("GENOs for %d and %d\n", TESTSNP0, TESTSNP1);
-		for (int j=0; j < ORDER; j++) {
-			printf("\n");
-			for (int i=0; i < NIND; i++) {
-				if (i< 10 || i > NIND-10)
-					printf("%d ", *(dev_SNP_values + NIND * *(&thread_combination[0] + j) + i));
-			}
-		}
-		printf("\nend GENOs");
-	}
-	*/
 	
 	
 	struct controlscases thread_table[TABLE_SIZE];
@@ -348,27 +307,7 @@ __global__ void MDR( int* dev_SNP_values, float* dev_output, int* dev_tp, int* d
 			 }
 		}
 
-		//only a print
-		if (tid == TESTCOMB || (*(&thread_combination[0] + 0) == TESTSNP0 && *(&thread_combination[0] + 1) == TESTSNP1)){
-			printf("***************\ngpu%d-tid%d\ncomb. ", deviceID, tid);
-			for (int q=0; q< ORDER; q++)
-				printf("%d ", *(&thread_combination[0] + q));
-			printf("\n\n");
-			for (int i=0; i< TABLE_SIZE; i++) {
-				printf("thread_table[%d].controls, cases: %d %d ",i,(*(&thread_table[0] + i )).controls, (*(&thread_table[0] + i )).cases);
-				if ( (((*(&thread_table[0] + i )).cases) / float((*(&thread_table[0] + i )).controls + 0.01) >= THR ) ){
-					int_to_index(i, ORDER, v);
-					printf(" geno ");
-					for (int l=0; l< ORDER; l++)
-						printf("%d ", v[l] );
-					printf("is HIGH\n");
-				}
-				else
-					printf("\n");
-			
-			}
-			printf("\n");
-		}
+		
 	
 		//moving two a two-dim variable
 		cases_high = 0;
@@ -400,11 +339,7 @@ __global__ void MDR( int* dev_SNP_values, float* dev_output, int* dev_tp, int* d
 
 			}
 		}
-		/*
-		if (CV > 1)
-			*(&high_genos[0] + c*ORDER + 0) = 9; //end sequence, since high_genos only reports the high ones
-		*/
-		//printf("******************\n");
+		
 		
 		train_measure = compute_measure(cases_high, controls_high, controls_low, cases_low, MEASURE);
 		
@@ -481,34 +416,7 @@ __global__ void MDR( int* dev_SNP_values, float* dev_output, int* dev_tp, int* d
 				 	
 				 
 				 
-				 /*
-				 for (int i=0; i< TABLE_SIZE * ORDER; i++) {
-				 	 if (high_genos[i] == 9){ //reached the end
-				 	 	if (ph)
-						 	cases_low += 1;
-						 else
-						 	controls_low += 1;
-						 break;
-						 }
-				 	 	
-				 	 int isequal = 1;
-				 	 for (int j=0; j< ORDER; j++){
-					 	if  (high_genos[i + j] != geno[i])
-					 		isequal = 0;
-					 		break;
-					 	}
-					 if (isequal){
-					 	if (ph)
-					 		cases_high += 1;
-					 	else
-					 		controls_high += 1;
-					 	break; //found, exit loop;
-					 	
-					 }
-			
-					 	 
-				 }
-				 */
+				
 			}
 	
 		
@@ -923,9 +831,9 @@ int main(int argc, char **argv)
   		fprintf(stderr,"Supported up to %d*%d combs. input'll be considered up to that combination. Run again with new file later.\n", deviceCount, prop.maxGridSize[0]);
   	
   	
-  	//fprintf(stderr,"\n*****************\n");
-	//fprintf(stderr,"Multifactor Dimensionality Reduction\n");
-	//fprintf(stderr,"*****************\n\n");	
+  	fprintf(stderr,"\n*****************\n");
+	fprintf(stderr,"Multifactor Dimensionality Reduction\n");
+	fprintf(stderr,"*****************\n\n");	
 	
 	//Allocate host memory 
 	int* mat_SNP = (int*)malloc(mat_SNP_size); 
@@ -1236,43 +1144,10 @@ int main(int argc, char **argv)
 			
 			//end new version
 			
-			
-		
-		/*
-		else{
-	  		for (int cv = 0; cv < CV; cv++){
-		  		fprintf(fpout,"---------- CV %d/%d train_measure test_measure(s) ----------\n", cv+1, CV);
-		  		
-		  		for(int i=0;i<NUMCOMBS;i++){
-					objects[i].value=*(output + NUMCOMBS * cv + 2 * i + 1); //sorting on test measure!
-					objects[i].index=i;
-				}
-				qsort(objects,NUMCOMBS,sizeof(objects[0]),cmp);
 
-		  		for (int j = 0; j < NUMCOMBS; j++){
-					for (int q=0; q< ORDER; q++){
-						if (q == 0)
-							fprintf(fpout,"snp%d ", *(combinations + j * ORDER + q));
-						else if (q == ORDER -1)
-							fprintf(fpout,"snp%d %f %f\n", 
-								*(combinations + j * ORDER + q),
-								*(output +  NUMCOMBS * cv + 2 * objects[j].index + 0), //sorted on test measure!
-								*(output + NUMCOMBS * cv + 2 * objects[j].index + 1) );
-								//*(output +  NUMCOMBS * cv + 2 * j + 0),
-								//*(output + NUMCOMBS * cv + 2 * j + 1) );
-						else
-							fprintf(fpout,"snp%d ", *(combinations + j * ORDER + q));
-					}
-
-				}
-			}
-		}*/
-		//fprintf(stderr,"Output written to file %s\n", outputFile);
 		}
 	}
-	
-	//else
-		//fprintf(stderr,"Output was not saved to file \n");
+
 	
 	free(output);
 	free(tp);
