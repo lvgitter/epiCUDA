@@ -155,16 +155,10 @@ struct DataStruct {
 
 __device__ float compute_measure(int cases_high, int controls_high, int controls_low, int cases_low, char m){
 	float train_measure;
-	//int positives = cases_high + cases_low
-	//int negatives = controls_low + controls_high
 	if (m - '0' == 50){ //BALANCED ACCURACY
 		train_measure = (cases_high/float(cases_high + cases_low) + controls_low/float(controls_low + controls_high))/2;
 	}
 	else if (m - '0' == 49){ //ACCURACY
-		train_measure = float(cases_high + controls_low)/float(cases_high + controls_low + controls_high + cases_low);
-		
-	}
-	else if (m - '0' == 55){
 		train_measure = float(cases_high + controls_low)/float(cases_high + controls_low + controls_high + cases_low);
 		
 	}
@@ -218,24 +212,18 @@ __device__ int index_to_int(int* v_indices, int order){
 }
 
 
-//#include "MDR.h"
-//#include "MDR.cu"
-
 __constant__ int dev_v_pheno[NIND];
 __constant__ int dev_cv_indices[NIND];
 	
 
 __global__ void MDR( int* dev_SNP_values, float* dev_output, int* dev_tp, int* dev_fp, int* dev_combinations, float THR, int deviceID, int deviceCount) {
     
-    	
-	//printf(" %d + %d * %d :", threadIdx.x, blockIdx.x, blockDim.x);
-	//__shared__ float cache[BS][threadsPerBlock];
+    	//thread id
 	int tid = threadIdx.x + blockIdx.x * blockDim.x;
-	
-	
-	
-	//printf(" %d ", tid);
+
 	int d;
+	
+	//only use required threads
 	if (deviceID + 1 < deviceCount)
 		d = (NUMCOMBS/deviceCount);
 	else
@@ -244,8 +232,7 @@ __global__ void MDR( int* dev_SNP_values, float* dev_output, int* dev_tp, int* d
 	if (tid >= d)
 		return;
 
-	//printf(" %d ", tid);
-	//int* thread_combination = (int*)malloc(ORDER * sizeof(int));
+
 	int thread_combination[ORDER]; //a combination (thread level)
 	//retrieve the combination indices
 	for (int i=0; i< ORDER; i++) {
@@ -253,12 +240,8 @@ __global__ void MDR( int* dev_SNP_values, float* dev_output, int* dev_tp, int* d
 	}
 	
 	
-	
-	
-	
 	struct controlscases thread_table[TABLE_SIZE];
 
-	//replace this initialization?
 	for (int i=0; i< TABLE_SIZE; i++) {
 		(*(&thread_table[0] + i )).controls = 0;
 		(*(&thread_table[0] + i )).cases = 0;
@@ -307,9 +290,8 @@ __global__ void MDR( int* dev_SNP_values, float* dev_output, int* dev_tp, int* d
 			 }
 		}
 
-		
 	
-		//moving two a two-dim variable
+		//moving two a one-dim variable
 		cases_high = 0;
 		controls_high = 0;
 		cases_low = 0;
@@ -339,33 +321,11 @@ __global__ void MDR( int* dev_SNP_values, float* dev_output, int* dev_tp, int* d
 
 			}
 		}
-		
+
 		
 		train_measure = compute_measure(cases_high, controls_high, controls_low, cases_low, MEASURE);
 		
-		
-		
-		//only a print
-		if (tid == TESTCOMB || (*(&thread_combination[0] + 0) == TESTSNP0 && *(&thread_combination[0] + 1) == TESTSNP1)){
-		if (MEASURE - '0' == 50){
-		printf("(tid %d) TRAIN BA %1.5f = (%d/(%d+%d) + %d/(%d+%d))/2\n***************\n", 
-				 tid, train_measure, cases_high, cases_high, controls_high, controls_low, controls_low, cases_low);
-		}
-		else if (MEASURE - '0' == 49){
-		printf("(tid %d) TRAIN AC	 %1.5f = (%d+%d)/(%d+%d+%d+%d)\n***************\n", 
-			 tid, train_measure, cases_high, controls_low, cases_high, controls_low, controls_high, cases_low);
-		}
-		else if (MEASURE - '0' == 55){
-		printf("(tid %d) TRAIN AC	 %1.5f = (%d+%d)/(%d+%d+%d+%d)\n***************\n", 
-			 tid, train_measure, cases_high, controls_low, cases_high, controls_low, controls_high, cases_low);
-		
-		}
-		}
-		
-		
-		
-		
-		
+				
 
 		//write result to global memory
 		if (CV == 1){
@@ -416,39 +376,37 @@ __global__ void MDR( int* dev_SNP_values, float* dev_output, int* dev_tp, int* d
 				 	
 				 
 				 
-				
+				 /*
+				 for (int i=0; i< TABLE_SIZE * ORDER; i++) {
+				 	 if (high_genos[i] == 9){ //reached the end
+				 	 	if (ph)
+						 	cases_low += 1;
+						 else
+						 	controls_low += 1;
+						 break;
+						 }
+				 	 	
+				 	 int isequal = 1;
+				 	 for (int j=0; j< ORDER; j++){
+					 	if  (high_genos[i + j] != geno[i])
+					 		isequal = 0;
+					 		break;
+					 	}
+					 if (isequal){
+					 	if (ph)
+					 		cases_high += 1;
+					 	else
+					 		controls_high += 1;
+					 	break; //found, exit loop;
+					 	
+					 }
+			
+					 	 
+				 }
+				 */
 			}
 	
 		
-		
-
-			//test_measure = float(controls_high + cases_low)/float(cases_high + controls_high + cases_low + controls_low);
-			if (MEASURE - '0' == 50){
-			if (controls_low + cases_low == 0)
-				//train_measure = float(controls_high + cases_low)/float(cases_high + controls_high + cases_low + controls_low);
-				test_measure = (cases_high/float(cases_high + controls_high) + 0)/1;
-			
-			else if (cases_high + controls_high == 0)
-				test_measure = (0 + controls_low/float(controls_low + cases_low))/1;
-			else
-				test_measure = (cases_high/float(cases_high + controls_high) + controls_low/float(controls_low + cases_low))/2;
-		
-			if (tid == TESTCOMB || (*(&thread_combination[0] + 0) == TESTSNP0 && *(&thread_combination[0] + 1) == TESTSNP1))
-			printf("(tid %d) TRAIN BA %1.5f = (%d/(%d+%d) + %d/(%d+%d))/2\n", 
-					 tid, test_measure, cases_high, cases_high, controls_high, controls_low, controls_low, cases_low);
-			}
-			else if (MEASURE - '0' == 49){
-				test_measure = float(cases_high + controls_low)/float(cases_high + controls_low + controls_high + cases_low);
-				if (tid == TESTCOMB || (*(&thread_combination[0] + 0) == TESTSNP0 && *(&thread_combination[0] + 1) == TESTSNP1))
-				printf("(tid %d) TRAIN AC	 %1.5f = (%d+%d)/(%d+%d+%d+%d)\n", 
-					 tid, test_measure, cases_high, controls_low, cases_high, controls_low, controls_high, cases_low);
-			
-			}
-			//write result to global memory
-			*(dev_output + NUMCOMBS * cv + 2 * tid + 1) = test_measure;
-		
-			 
-			if (tid == TESTCOMB) printf("**********************************\n\n"); 
 		
 		}
 	}
@@ -690,7 +648,7 @@ void print_cudaGetDeviceProperties(){
 }
 
 
-
+//called once per device
 void* routine( void *pvoidData) {
 	DataStruct *data = (DataStruct*)pvoidData;
 	HANDLE_ERROR( cudaSetDevice( data->deviceID ) );
@@ -714,19 +672,16 @@ void* routine( void *pvoidData) {
  	
   	//Allocate device memory
   	cudaMalloc((void**)&dev_mat_SNP, mat_SNP_size);
-  	
-	//cudaMalloc((void**)&dev_v_pheno, dev_v_pheno.mem_size); //no need, constant mem!
-  	//cudaMalloc((void**)&dev_cv_indices, indices_size); //no need, constant mem!
+
   	
   	// Copy host memory to device
-  	//HANDLE_ERROR( cudaMemcpy(dev_v_pheno, v_pheno, dev_v_pheno.mem_size, cudaMemcpyHostToDevice));
   	cudaMemcpyToSymbol( dev_v_pheno,  v_pheno,  v_pheno_size );
   	cudaMemcpyToSymbol( dev_cv_indices,  cv_indices,  indices_size );
 	HANDLE_ERROR( cudaMemcpy(dev_mat_SNP, mat_SNP, mat_SNP_size, cudaMemcpyHostToDevice));
-	// (combinations_size / sizeof(int))/deviceCount) * deviceID is the same for all gpus, except last one is more loaded
+	// (combinations_size / sizeof(int))/deviceCount) * deviceID --> is the same for all gpus, except last one is more loaded
 	
 	
-	//start index (included), number of elements , end index (included)
+	//compute start index (included), number of elements , end index (included)
 	unsigned long s,d, e;
 	s = (0 + (NUMCOMBS/deviceCount) * deviceID );
 	if (deviceID + 1 < deviceCount)
@@ -734,18 +689,14 @@ void* routine( void *pvoidData) {
 	else
 		d = NUMCOMBS - 1 - (s - 1); //how many total - how many done
 	e = s + d - 1;
+	
 	cudaMalloc((void**)&dev_combinations, (d *  ORDER * sizeof(int)) );
 	HANDLE_ERROR( cudaMemcpy(dev_combinations, (combinations + s * ORDER), (d *  ORDER * sizeof(int)), cudaMemcpyHostToDevice));
 	
 	fprintf(stderr,"\nGPU %d, calling the kernel with this configuration:\n", deviceID);
 	fprintf(stderr," comb-start: %lu, #combs: %lu, comb-end: %lu\n order: %d\n NSNPS: %d\n NIND: %d\n # CVs: %d\n THRESHOLD: %f\n BLOCK SIZE: %d\n GRID SIZE: %d\n",s,d,e, ORDER, NSNPS, NIND, CV, THR, BSx, GSx);
 
-  	//HANDLE_ERROR( cudaMemcpy(dev_cv_indices, cv_indices, indices_size, cudaMemcpyHostToDevice));
-  	//fprintf(stderr,"matrices copied  to GPU %d\n", deviceID);
-  	
-  	//cudaHostAlloc((void**)&output,output.mem_size,cudaHostAllocDefault);
-  	
-  	
+
   	s = (0 + ((NUMCOMBS *  ONEORTWO * CV)/(deviceCount) * deviceID ));
 	if (deviceID + 1 < deviceCount)
 		d = (NUMCOMBS *  ONEORTWO * CV)/(deviceCount);
@@ -786,15 +737,14 @@ void* routine( void *pvoidData) {
 	//fprintf(stderr,"GPU%d, output, tp, fp copied to host \n", deviceID);
 	
 	
-  	//free
+  	//free structures
   	cudaFree(dev_mat_SNP);
 	//cudaFree(dev_v_pheno);
 	cudaFree(dev_output);
 	cudaFree(dev_tp);
 	cudaFree(dev_fp);
 	cudaFree(dev_combinations);
-	//cudaFree(dev_cv_indices);
-	//printf("GPU %d, returning; \nelapsed %f seconds\n", deviceID, ((float)(clock() - start_clock) / CLOCKS_PER_SEC));
+
 	return 0;
 }
 
@@ -812,28 +762,24 @@ int main(int argc, char **argv)
 	parseArgs(argc,argv);
 	 
 	 
-  	//print_cudaGetDeviceProperties(); 
-  	
+  	//SELECT DEVICES
   	int deviceCount;
 	HANDLE_ERROR( cudaGetDeviceCount( &deviceCount ) );
-	//printf( "found %d devices\n", deviceCount );
+	
 	if (NUMDEVICES > deviceCount || deviceCount == 0){
 		fprintf(stderr,"error: less devices detected (%d) than specified (%d)! Exiting...\n", deviceCount, NUMDEVICES);
 		return 0;
 	}
-	//fprintf(stderr,"Gonna use first %d of %d devices\n", NUMDEVICES, deviceCount);
 	deviceCount = imin(deviceCount, NUMDEVICES);
-  	
   	cudaDeviceProp prop;
   	HANDLE_ERROR( cudaGetDeviceProperties( &prop, 0 ) );
-  	
   	if (NUMCOMBS/deviceCount > prop.maxGridSize[0])
   		fprintf(stderr,"Supported up to %d*%d combs. input'll be considered up to that combination. Run again with new file later.\n", deviceCount, prop.maxGridSize[0]);
   	
   	
-  	fprintf(stderr,"\n*****************\n");
-	fprintf(stderr,"Multifactor Dimensionality Reduction\n");
-	fprintf(stderr,"*****************\n\n");	
+  	//fprintf(stderr,"\n*****************\n");
+	//fprintf(stderr,"Multifactor Dimensionality Reduction\n");
+	//fprintf(stderr,"*****************\n\n");	
 	
 	//Allocate host memory 
 	int* mat_SNP = (int*)malloc(mat_SNP_size); 
@@ -844,18 +790,13 @@ int main(int argc, char **argv)
 	int* combinations = (int*)malloc(combinations_size);
 	int* cv_indices = (int*)malloc(indices_size);
 	
-	/*
-	if (CV <= 1){
-		fprintf(stderr,"will run only one pass, no train-test... \n");
-	}
-	*/
+
 	//generate a permutation of the individuals indices
 	for(int i=0;i<NIND;++i){
         	*(cv_indices + i) = i;
     		}
     	
-    	/*	
-		//permute r with Fisher-Yates shuffling algorithm
+    	permute r with Fisher-Yates shuffling algorithm
 	for (int i = NIND; i >= 0; --i){
 		//generate a random number [0, n-1]
 		int j = rand() % (i+1);
@@ -865,13 +806,13 @@ int main(int argc, char **argv)
 		*(cv_indices + i) = *(cv_indices + j);
 		*(cv_indices + j) = temp;
 	}
-	*/
+	
   	
   	//Read the matrix in host data
 	readintData(genoFile, NSNPS, NIND, mat_SNP);
-	//fprintf(stderr,"geno file read..\n");
+	fprintf(stderr,"geno file read..\n");
 	readintData(phenoFile, NIND, 1, v_pheno);
-	//fprintf(stderr,"pheno file read..\n");
+	fprintf(stderr,"pheno file read..\n");
 	
 	int ncases;
 	if (THR < 0){
@@ -885,6 +826,8 @@ int main(int argc, char **argv)
 	}
 	
 	
+	//READ COMBINATIONS
+	//CASE1: NULL model--> Exhaustive in-memory generation
 	if (basic_model % 2 != 0){
 		
 		//fprintf(stderr,"detected NULL model. Exhaustive in-memory generation...\n");
@@ -966,17 +909,18 @@ int main(int argc, char **argv)
 				}
 			}
 		}
-	//fprintf(stderr,"combinations in-memory generated..\n");	
+		
 	}
+	
+	//CASE2: read file
 	else{	
 		
-		//Read combinations
-		fprintf(stderr,"detected disease model\n");
+		//fprintf(stderr,"detected disease model\n");
 		readCombinations(combFile, NUMCOMBS, ORDER, combinations);
 		fprintf(stderr,"combinations file read..\n");
 	}
 	
-
+	//THREAD CALLS
 			
   	//printf("calling therads; \nelapsed %f seconds\n", ((float)(clock() - start_clock) / CLOCKS_PER_SEC));
   	CUTThread threads[deviceCount-1];
@@ -1144,10 +1088,44 @@ int main(int argc, char **argv)
 			
 			//end new version
 			
+			
+		
+		/*
+		//old sorting version for large output
+		else{
+	  		for (int cv = 0; cv < CV; cv++){
+		  		fprintf(fpout,"---------- CV %d/%d train_measure test_measure(s) ----------\n", cv+1, CV);
+		  		
+		  		for(int i=0;i<NUMCOMBS;i++){
+					objects[i].value=*(output + NUMCOMBS * cv + 2 * i + 1); //sorting on test measure!
+					objects[i].index=i;
+				}
+				qsort(objects,NUMCOMBS,sizeof(objects[0]),cmp);
 
+		  		for (int j = 0; j < NUMCOMBS; j++){
+					for (int q=0; q< ORDER; q++){
+						if (q == 0)
+							fprintf(fpout,"snp%d ", *(combinations + j * ORDER + q));
+						else if (q == ORDER -1)
+							fprintf(fpout,"snp%d %f %f\n", 
+								*(combinations + j * ORDER + q),
+								*(output +  NUMCOMBS * cv + 2 * objects[j].index + 0), //sorted on test measure!
+								*(output + NUMCOMBS * cv + 2 * objects[j].index + 1) );
+								//*(output +  NUMCOMBS * cv + 2 * j + 0),
+								//*(output + NUMCOMBS * cv + 2 * j + 1) );
+						else
+							fprintf(fpout,"snp%d ", *(combinations + j * ORDER + q));
+					}
+
+				}
+			}
+		}*/
+		//fprintf(stderr,"Output written to file %s\n", outputFile);
 		}
 	}
-
+	
+	//else
+		//fprintf(stderr,"Output was not saved to file \n");
 	
 	free(output);
 	free(tp);
